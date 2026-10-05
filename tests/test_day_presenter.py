@@ -152,6 +152,10 @@ def test_timeline_preserves_locations_and_maps(presented_days):
 
             if trip.destination_address:
                 assert (
+                    item.destination_text
+                    == trip.destination_address
+                )
+                assert (
                     item.location_text
                     == trip.destination_address
                 )
@@ -194,3 +198,43 @@ def test_text_renderer_produces_complete_output(presented_days):
     assert "Kilómetros:" in text
     assert "Cronología:" in text
     assert "Trayecto 1" in text
+
+def test_trip_origins_follow_previous_stop(presented_days):
+    checked_following_trip = False
+
+    for day, analysis, view in presented_days:
+        if not day.has_activity:
+            continue
+
+        trip_views = [
+            item
+            for item in view.timeline
+            if item.kind == "trip"
+        ]
+
+        assert trip_views
+
+        assert (
+            trip_views[0].origin_text
+            == "Origen no disponible"
+        )
+
+        for index in range(1, len(trip_views)):
+            previous_stop = analysis.stops[index - 1]
+
+            expected_origin = (
+                previous_stop.address
+                or analysis.trips[
+                    index - 1
+                ].destination_address
+                or "Origen no disponible"
+            )
+
+            assert (
+                trip_views[index].origin_text
+                == expected_origin
+            )
+
+            checked_following_trip = True
+
+    assert checked_following_trip

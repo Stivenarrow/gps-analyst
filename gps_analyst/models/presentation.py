@@ -21,6 +21,9 @@ class GpsTimelineItemView:
     duration_text: str
 
     label: str
+
+    origin_text: str | None
+    destination_text: str | None
     location_text: str
 
     distance_text: str | None

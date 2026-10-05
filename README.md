@@ -250,3 +250,22 @@ Incluye:
 - representación explícita de jornadas sin actividad.
 
 El presenter no modifica ni reinterpreta los datos GPS: únicamente presenta el resultado ya normalizado y validado por las capas anteriores.
+
+
+## Aplicación local de consulta
+
+GPS Analyst incluye una aplicación local de escritorio construida con PySide6.
+
+Permite:
+
+- abrir exportaciones XLSX de Automatica PLUS en modo de solo lectura;
+- buscar y seleccionar vehículos;
+- seleccionar fechas disponibles;
+- consultar el resumen completo de la jornada;
+- visualizar una cronología ordenada de trayectos y paradas;
+- distinguir explícitamente origen, destino y ubicación de parada;
+- declarar el origen inicial como no disponible cuando la fuente no lo proporciona;
+- conservar y abrir enlaces de mapa asociados a los eventos;
+- consultar también jornadas sin actividad.
+
+La interfaz consume las capas de importación, análisis y presentación existentes y no contiene lógica específica de Automatica PLUS ni reglas laborales. Esto permite reutilizar el motor GPS en futuras integraciones, incluido el cruce con Time Analyst.

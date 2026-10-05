@@ -13,8 +13,18 @@ class GpsDayPresenter:
         analysis: GpsDayAnalysis,
     ) -> GpsDayView:
         timeline: list[GpsTimelineItemView] = []
+        previous_location: str | None = None
 
         for index, trip in enumerate(analysis.trips):
+            trip_origin = (
+                previous_location
+                or "Origen no disponible"
+            )
+
+            trip_destination = (
+                trip.destination_address
+                or "Destino no disponible"
+            )
             timeline.append(
                 GpsTimelineItemView(
                     kind="trip",
@@ -27,10 +37,9 @@ class GpsDayPresenter:
                         trip.duration_seconds
                     ),
                     label=f"Trayecto {trip.index}",
-                    location_text=(
-                        trip.destination_address
-                        or "Destino no disponible"
-                    ),
+                    origin_text=trip_origin,
+                    destination_text=trip_destination,
+                    location_text=trip_destination,
                     distance_text=self._format_distance(
                         trip.distance_km
                     ),
@@ -63,6 +72,8 @@ class GpsDayPresenter:
                             stop.index,
                             stop.stop_type,
                         ),
+                        origin_text=None,
+                        destination_text=None,
                         location_text=(
                             stop.address
                             or "Ubicación no disponible"
@@ -71,6 +82,12 @@ class GpsDayPresenter:
                         speed_text=None,
                         map_target=stop.map_target,
                     )
+                )
+
+                previous_location = (
+                    stop.address
+                    or trip.destination_address
+                    or previous_location
                 )
 
         return GpsDayView(
@@ -149,7 +166,8 @@ class GpsDayPresenter:
                     f"{item.duration_text} | "
                     f"{item.distance_text} | "
                     f"{item.speed_text} | "
-                    f"{item.location_text}"
+                    f"{item.origin_text} → "
+                    f"{item.destination_text}"
                 )
             else:
                 lines.append(
