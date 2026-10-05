@@ -4,19 +4,18 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixture_source import fixture_files
+
 from gps_analyst.services.workbook_session import (
     GpsWorkbookSession,
 )
 
 
-FIXTURE_DIR = Path("data/private/fixtures")
 
 
 @pytest.fixture(scope="module")
 def loaded_sessions():
-    files = sorted(
-        FIXTURE_DIR.glob("*.xlsx")
-    )
+    files = fixture_files()
 
     assert files
 
@@ -36,7 +35,7 @@ def loaded_sessions():
     return sessions
 
 
-def test_all_private_workbooks_load(loaded_sessions):
+def test_all_fixture_workbooks_load(loaded_sessions):
     for path, session in loaded_sessions:
         assert session.source_path == path
         assert session.day_count > 0

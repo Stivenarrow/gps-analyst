@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixture_source import fixture_files
+
 from gps_analyst.services.journey_analysis import (
     GpsDayAnalysisService,
 )
@@ -12,7 +14,6 @@ from gps_analyst.sources.automatica_plus_excel import (
 )
 
 
-FIXTURE_DIR = Path("data/private/fixtures")
 
 
 @pytest.fixture(scope="module")
@@ -20,7 +21,7 @@ def analyzed_days():
     source = AutomaticaPlusExcelSource()
     service = GpsDayAnalysisService()
 
-    files = sorted(FIXTURE_DIR.glob("*.xlsx"))
+    files = fixture_files()
 
     assert files
 

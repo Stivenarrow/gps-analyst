@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixture_source import fixture_files
+
 from gps_analyst.services.day_presenter import (
     GpsDayPresenter,
 )
@@ -15,7 +17,6 @@ from gps_analyst.sources.automatica_plus_excel import (
 )
 
 
-FIXTURE_DIR = Path("data/private/fixtures")
 
 
 @pytest.fixture(scope="module")
@@ -26,7 +27,7 @@ def presented_days():
 
     result = []
 
-    for path in sorted(FIXTURE_DIR.glob("*.xlsx")):
+    for path in fixture_files():
         data = source.load(path)
 
         assert data.is_valid

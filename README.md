@@ -269,3 +269,26 @@ Permite:
 - consultar también jornadas sin actividad.
 
 La interfaz consume las capas de importación, análisis y presentación existentes y no contiene lógica específica de Automatica PLUS ni reglas laborales. Esto permite reutilizar el motor GPS en futuras integraciones, incluido el cruce con Time Analyst.
+
+
+## Tests reproducibles y regresión privada
+
+La suite de tests no depende de datos operativos reales.
+
+Por defecto, `pytest` genera y utiliza fixtures XLSX sintéticos y anónimos compatibles con el formato esperado de Automatica PLUS:
+
+```cmd
+python -m pytest -q
+```
+
+Esto permite ejecutar la suite completa en un clon limpio del repositorio sin matrículas, empleados, ubicaciones ni exportaciones privadas.
+
+Opcionalmente, durante el desarrollo local puede ejecutarse la misma suite contra exportaciones reales almacenadas fuera de Git en `data/private/fixtures`:
+
+```cmd
+set GPS_ANALYST_TEST_DATA=private
+python -m pytest -q
+set GPS_ANALYST_TEST_DATA=
+```
+
+Los datos privados sirven únicamente como regresión local adicional y no son necesarios para desarrollar, validar ni ejecutar la aplicación.

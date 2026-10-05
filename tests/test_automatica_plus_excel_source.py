@@ -5,16 +5,15 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixture_source import fixture_files
+
 from gps_analyst.sources.automatica_plus_excel import (
     AutomaticaPlusExcelSource,
 )
 
 
-FIXTURE_DIR = Path("data/private/fixtures")
 
 
-def fixture_files() -> list[Path]:
-    return sorted(FIXTURE_DIR.glob("*.xlsx"))
 
 
 @pytest.fixture(scope="module")
@@ -22,8 +21,8 @@ def parsed_files():
     files = fixture_files()
 
     assert files, (
-        "No hay Excel de prueba en data/private/fixtures. "
-        "Copia ahí las exportaciones reales de Automatica PLUS."
+        "No hay fixtures XLSX disponibles. "
+        "Revisa la configuración de la fuente de fixtures."
     )
 
     source = AutomaticaPlusExcelSource()
@@ -34,14 +33,14 @@ def parsed_files():
     ]
 
 
-def test_all_private_fixtures_parse(parsed_files):
+def test_all_fixture_workbooks_parse(parsed_files):
     assert parsed_files
 
     for data in parsed_files:
         assert data.days
 
 
-def test_all_private_fixtures_validate(parsed_files):
+def test_all_fixture_workbooks_validate(parsed_files):
     failures = []
 
     for data in parsed_files:
