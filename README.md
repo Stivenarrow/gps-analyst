@@ -292,3 +292,34 @@ set GPS_ANALYST_TEST_DATA=
 ```
 
 Los datos privados sirven únicamente como regresión local adicional y no son necesarios para desarrollar, validar ni ejecutar la aplicación.
+
+
+## Distribución Windows
+
+GPS Analyst puede empaquetarse como aplicación de escritorio para Windows mediante PyInstaller en modo `onedir`.
+
+### Preparar dependencias de build
+
+```cmd
+python -m pip install -r requirements-build.txt
+```
+
+### Generar la distribución
+
+```cmd
+BUILD_GPS_ANALYST.cmd
+```
+
+El proceso ejecuta primero la suite reproducible de tests y cancela el build si existe algún fallo. Después genera:
+
+```text
+dist\\GPS Analyst\\
+├── GPS Analyst.exe
+└── _internal\\
+```
+
+Debe distribuirse la carpeta `GPS Analyst` completa; el ejecutable no debe separarse de `_internal`.
+
+El equipo de destino no necesita Python ni un entorno virtual. Los XLSX de Automatica PLUS se seleccionan externamente desde la aplicación y no se incluyen en la distribución.
+
+El script de build verifica además que no se haya incorporado ningún XLSX ni `data/private` al paquete generado.
