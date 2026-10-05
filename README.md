@@ -183,6 +183,8 @@ Reglas observadas inicialmente:
 \- `PARA = hora` y `ARRANCA = ??` representa el último trayecto real del bloque.
 
 \- Los valores de kilómetros y velocidad de una fila de apertura pueden estar arrastrados del bloque anterior y deben ignorarse.
+- Automatica PLUS puede omitir excepcionalmente la fila de apertura y contaminar el primer detalle con valores arrastrados; en ese caso deben conservarse los valores RAW y normalizarse únicamente los valores utilizables cuando el resumen y la coherencia física permitan demostrar la corrección.
+- Las distancias visibles están redondeadas a una decimal; la validación entre suma de detalles y resumen debe admitir la acumulación matemática de ese redondeo en función del número de tramos.
 
 \- `--` representa ausencia de actividad en determinados campos de resumen.
 
