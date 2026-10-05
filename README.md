@@ -232,3 +232,21 @@ Produce:
 - validación de tiempos, kilómetros y estructura contra el resumen normalizado.
 
 Esta capa no modifica el importador ni contiene todavía reglas laborales o integración con Woffu/Time Analyst.
+
+
+## Presentación de jornada
+
+La capa `GpsDayPresenter` transforma el análisis técnico de una jornada en una representación humana reutilizable.
+
+Incluye:
+
+- resumen de fecha, inicio y fin;
+- duración total, conducción y tiempo parado;
+- kilómetros y velocidad punta;
+- cronología ordenada de trayectos y paradas;
+- duración, distancia, velocidad y destino de cada trayecto;
+- duración, tipo y ubicación de cada parada;
+- conservación de enlaces de mapa cuando están disponibles;
+- representación explícita de jornadas sin actividad.
+
+El presenter no modifica ni reinterpreta los datos GPS: únicamente presenta el resultado ya normalizado y validado por las capas anteriores.
