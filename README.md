@@ -216,3 +216,19 @@ Dependencias iniciales:
 
 \- pytest
 
+
+
+## Reconstrucción de jornada
+
+La capa `GpsDayAnalysisService` transforma cada `VehicleDay` normalizado en una cronología explícita y verificable.
+
+Produce:
+
+- trayectos con inicio, fin, duración, kilómetros, velocidad punta y destino;
+- paradas con inicio, fin, duración, tipo, dirección y mapa;
+- continuidad temporal completa desde el inicio hasta el final de jornada;
+- soporte de jornadas sin actividad;
+- soporte del caso excepcional en que Automatica PLUS omite la fila `opening`;
+- validación de tiempos, kilómetros y estructura contra el resumen normalizado.
+
+Esta capa no modifica el importador ni contiene todavía reglas laborales o integración con Woffu/Time Analyst.
