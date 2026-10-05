@@ -36,7 +36,7 @@ class AutomaticaPlusExcelSource:
     Lector de exportaciones XLSX de Automatica PLUS.
 
     La fuente se limita a transformar el formato del proveedor a un modelo
-    GPS común. No contiene reglas laborales ni lógica relacionada con Woffu.
+    GPS común. No contiene reglas laborales ni lógica de otros sistemas.
     """
 
     def load(self, path: str | Path) -> GpsWorkbookData:

@@ -1,289 +1,175 @@
 # GPS Analyst
 
+GPS Analyst is a Windows desktop application for reconstructing and reviewing
+vehicle activity from GPS tracking exports.
+
+The current release supports XLSX exports from **Automatica PLUS** and
+transforms low-level tracking records into a chronological, human-readable
+view of each vehicle day.
+
+**Stable release:** `v0.1.0`
+
+## What it does
+
+GPS Analyst can:
+
+- import XLSX exports in read-only mode;
+- detect vehicles and available dates;
+- identify active and inactive days;
+- reconstruct trips and intermediate stops;
+- calculate activity start and end times;
+- calculate driving and stopped time;
+- summarize distance and maximum speed;
+- preserve available map links;
+- distinguish trip origin, trip destination and stop location;
+- validate reconstructed values against source totals;
+- present the result through a native Windows desktop interface.
+
+The objective is not only to calculate values, but to make a GPS day
+**understandable and auditable**.
+
+## Desktop application
+
+![GPS Analyst desktop application](docs/gps-analyst-v0.1.png)
+
+
+The application is built with **Python 3.12** and **PySide6**.
+
+Typical workflow:
+
+```text
+Open XLSX
+    ↓
+Select vehicle
+    ↓
+Select date
+    ↓
+Review daily summary
+    ↓
+Inspect trips and stops
+    ↓
+Open source map location when available
+```
+
+The interface presents:
+
+- start and end of activity;
+- total day duration;
+- driving time;
+- stopped time;
+- kilometres;
+- maximum speed;
+- chronological trips and stops;
+- explicit origin and destination semantics.
+
+When the source does not provide the initial origin of the day, GPS Analyst
+reports it as unavailable instead of inferring or inventing a location.
+
+## Architecture
+
+The project separates source-specific parsing from the common analysis model:
+
+```text
+Automatica PLUS XLSX
+        ↓
+AutomaticaPlusExcelSource
+        ↓
+Common GPS model
+        ↓
+GpsDayAnalysisService
+        ↓
+GpsDayPresenter
+        ↓
+Workbook session
+        ↓
+PySide6 desktop UI
+```
+
+This separation allows future source adapters or comparison layers to reuse
+the same analysis and presentation services.
+
+Main package structure:
+
+```text
+gps_analyst/
+├── app.py
+├── models/
+│   ├── gps.py
+│   ├── analysis.py
+│   └── presentation.py
+├── services/
+│   ├── journey_analysis.py
+│   ├── day_presenter.py
+│   └── workbook_session.py
+└── sources/
+    └── automatica_plus_excel.py
+```
 
+## Source normalization
 
-GPS Analyst es una herramienta interna para interpretar y analizar datos GPS de flota procedentes de Automatica PLUS.
+Real-world GPS exports are not always perfectly uniform.
 
+The importer therefore keeps source parsing and normalization explicit.
+Among the cases covered by the current implementation:
 
+- opening rows that are not real journeys;
+- intermediate stops and final journey rows;
+- inactive days;
+- durations longer than 24 hours;
+- decimal values using comma notation;
+- zero-distance activity;
+- values carried over into opening rows;
+- exceptional cases where an opening row is omitted;
+- accumulated rounding differences in displayed distances.
 
-## Estado
+Raw source values are preserved where useful, while normalized values are
+used only when the source summary and timeline consistency support the
+correction.
 
+## Journey reconstruction
 
+`GpsDayAnalysisService` converts each normalized vehicle day into a complete
+chronology.
 
-Versión estable: v0.1.0
+It produces:
 
+- trips with start, end, duration, distance, maximum speed and destination;
+- stops with start, end, duration, stop type and location;
+- continuous timing from the start to the end of the recorded day;
+- support for inactive days;
+- validation of timing and distance consistency.
 
+## Presentation layer
 
-## Objetivo V0.1
+`GpsDayPresenter` converts the technical analysis into a reusable
+human-facing model.
 
+This keeps formatting and UI concerns separate from GPS interpretation logic
+and allows the same analysis results to be reused by other interfaces or
+reporting layers.
 
+## Tests
 
-La primera versión se centra exclusivamente en el análisis GPS.
+The repository contains a fully reproducible test suite.
 
-
-
-Debe ser capaz de:
-
-
-
-- importar archivos Excel oficiales de Automatica PLUS;
-
-- detectar vehículos y días;
-
-- interpretar actividad y días sin actividad;
-
-- reconstruir trayectos y paradas;
-
-- obtener inicio y fin de actividad;
-
-- calcular tiempos de conducción y parada;
-
-- obtener kilómetros, velocidad y localizaciones;
-
-- validar los cálculos contra las hojas Totales y SubTotales;
-
-- presentar una jornada GPS comprensible y verificable.
-
-
-
-## Fuera de alcance de V0.1
-
-
-
-Todavía no se incluye:
-
-
-
-- integración con Woffu;
-
-- cruce con Time Analyst;
-
-- alertas laborales;
-
-- albaranes o facturación;
-
-- identificación mediante iButton;
-
-- modificaciones sobre Automatica PLUS.
-
-
-
-## Arquitectura
-
-
-
-Las fuentes de datos se mantienen separadas del motor de análisis.
-
-
-
-Inicialmente:
-
-
-
-Automatica PLUS Excel
-
-→ ExcelSource
-
-→ modelo GPS común
-
-→ servicios de análisis
-
-→ interfaz
-
-
-
-Si Automatica PLUS facilita una API:
-
-
-
-Automatica PLUS API
-
-→ ApiSource
-
-→ mismo modelo GPS común
-
-→ mismos servicios de análisis
-
-→ misma interfaz
-
-
-
-La futura API no debe obligar a reescribir el motor GPS.
-
-
-
-## Seguridad y privacidad
-
-
-
-El proyecto trabaja en modo de solo lectura respecto a Automatica PLUS.
-
-
-
-Los Excel reales, matrículas, nombres, ubicaciones, coordenadas y demás información operativa se consideran datos privados.
-
-
-
-Los archivos reales se almacenarán únicamente en:
-
-
-
-data/private/
-
-
-
-Ese directorio está excluido de Git.
-
-
-
-No deben publicarse:
-
-
-
-- archivos Excel reales;
-
-- credenciales;
-
-- nombres de empleados;
-
-- matrículas reales;
-
-- posiciones GPS reales;
-
-- datos de clientes;
-
-- rutas o históricos reales.
-
-
-
-## Formato Automatica PLUS
-
-
-
-Los Excel estudiados contienen las hojas:
-
-
-
-- Totales
-
-- SubTotales
-
-- Detalle
-
-
-
-Reglas observadas inicialmente:
-
-
-
-- `PARA = ??` y `ARRANCA = hora` representa una apertura de bloque y no un trayecto real.
-
-- `PARA = hora` y `ARRANCA = hora` representa una parada intermedia entre trayectos.
-
-- `PARA = hora` y `ARRANCA = ??` representa el último trayecto real del bloque.
-
-- Los valores de kilómetros y velocidad de una fila de apertura pueden estar arrastrados del bloque anterior y deben ignorarse.
-- Automatica PLUS puede omitir excepcionalmente la fila de apertura y contaminar el primer detalle con valores arrastrados; en ese caso deben conservarse los valores RAW y normalizarse únicamente los valores utilizables cuando el resumen y la coherencia física permitan demostrar la corrección.
-- Las distancias visibles están redondeadas a una decimal; la validación entre suma de detalles y resumen debe admitir la acumulación matemática de ese redondeo en función del número de tramos.
-
-- `--` representa ausencia de actividad en determinados campos de resumen.
-
-- Las duraciones pueden superar las 24 horas y deben tratarse como duraciones, no como horas del reloj.
-
-- Los decimales pueden utilizar coma.
-
-- Un día con 0 km no implica necesariamente ausencia total de actividad.
-
-
-
-Estas reglas deberán quedar cubiertas mediante pruebas automatizadas.
-
-
-
-## Desarrollo
-
-
-
-Python 3.12.
-
-
-
-Dependencias iniciales:
-
-
-
-- openpyxl
-
-- pytest
-
-
-
-## Reconstrucción de jornada
-
-La capa `GpsDayAnalysisService` transforma cada `VehicleDay` normalizado en una cronología explícita y verificable.
-
-Produce:
-
-- trayectos con inicio, fin, duración, kilómetros, velocidad punta y destino;
-- paradas con inicio, fin, duración, tipo, dirección y mapa;
-- continuidad temporal completa desde el inicio hasta el final de jornada;
-- soporte de jornadas sin actividad;
-- soporte del caso excepcional en que Automatica PLUS omite la fila `opening`;
-- validación de tiempos, kilómetros y estructura contra el resumen normalizado.
-
-Esta capa no modifica el importador ni contiene todavía reglas laborales o integración con Woffu/Time Analyst.
-
-
-## Presentación de jornada
-
-La capa `GpsDayPresenter` transforma el análisis técnico de una jornada en una representación humana reutilizable.
-
-Incluye:
-
-- resumen de fecha, inicio y fin;
-- duración total, conducción y tiempo parado;
-- kilómetros y velocidad punta;
-- cronología ordenada de trayectos y paradas;
-- duración, distancia, velocidad y destino de cada trayecto;
-- duración, tipo y ubicación de cada parada;
-- conservación de enlaces de mapa cuando están disponibles;
-- representación explícita de jornadas sin actividad.
-
-El presenter no modifica ni reinterpreta los datos GPS: únicamente presenta el resultado ya normalizado y validado por las capas anteriores.
-
-
-## Aplicación local de consulta
-
-GPS Analyst incluye una aplicación local de escritorio construida con PySide6.
-
-Permite:
-
-- abrir exportaciones XLSX de Automatica PLUS en modo de solo lectura;
-- buscar y seleccionar vehículos;
-- seleccionar fechas disponibles;
-- consultar el resumen completo de la jornada;
-- visualizar una cronología ordenada de trayectos y paradas;
-- distinguir explícitamente origen, destino y ubicación de parada;
-- declarar el origen inicial como no disponible cuando la fuente no lo proporciona;
-- conservar y abrir enlaces de mapa asociados a los eventos;
-- consultar también jornadas sin actividad.
-
-La interfaz consume las capas de importación, análisis y presentación existentes y no contiene lógica específica de Automatica PLUS ni reglas laborales. Esto permite reutilizar el motor GPS en futuras integraciones, incluido el cruce con Time Analyst.
-
-
-## Tests reproducibles y regresión privada
-
-La suite de tests no depende de datos operativos reales.
-
-Por defecto, `pytest` genera y utiliza fixtures XLSX sintéticos y anónimos compatibles con el formato esperado de Automatica PLUS:
+By default:
 
 ```cmd
 python -m pytest -q
 ```
 
-Esto permite ejecutar la suite completa en un clon limpio del repositorio sin matrículas, empleados, ubicaciones ni exportaciones privadas.
+uses generated synthetic XLSX fixtures. No operational GPS files are
+required.
 
-Opcionalmente, durante el desarrollo local puede ejecutarse la misma suite contra exportaciones reales almacenadas fuera de Git en `data/private/fixtures`:
+Current release:
+
+```text
+30 tests
+30 passed
+```
+
+For local development, the same suite can optionally be run against private
+regression files stored outside Git:
 
 ```cmd
 set GPS_ANALYST_TEST_DATA=private
@@ -291,35 +177,106 @@ python -m pytest -q
 set GPS_ANALYST_TEST_DATA=
 ```
 
-Los datos privados sirven únicamente como regresión local adicional y no son necesarios para desarrollar, validar ni ejecutar la aplicación.
+The private regression dataset is not required to build, test or understand
+the project.
 
+## Windows distribution
 
-## Distribución Windows
+GPS Analyst can be packaged as a standalone Windows application with
+PyInstaller.
 
-GPS Analyst puede empaquetarse como aplicación de escritorio para Windows mediante PyInstaller en modo `onedir`.
-
-### Preparar dependencias de build
+Install build dependencies:
 
 ```cmd
 python -m pip install -r requirements-build.txt
 ```
 
-### Generar la distribución
+Build:
 
 ```cmd
 BUILD_GPS_ANALYST.cmd
 ```
 
-El proceso ejecuta primero la suite reproducible de tests y cancela el build si existe algún fallo. Después genera:
+The resulting distribution is:
 
 ```text
-dist\\GPS Analyst\\
+dist\GPS Analyst\
 ├── GPS Analyst.exe
-└── _internal\\
+└── _internal\
 ```
 
-Debe distribuirse la carpeta `GPS Analyst` completa; el ejecutable no debe separarse de `_internal`.
+The complete `GPS Analyst` folder must be distributed together.
 
-El equipo de destino no necesita Python ni un entorno virtual. Los XLSX de Automatica PLUS se seleccionan externamente desde la aplicación y no se incluyen en la distribución.
+The target Windows computer does not need Python or a virtual environment
+installed.
 
-El script de build verifica además que no se haya incorporado ningún XLSX ni `data/private` al paquete generado.
+The build process:
+
+1. runs the reproducible test suite;
+2. cancels packaging if tests fail;
+3. builds the PySide6 application;
+4. verifies that no XLSX file is embedded;
+5. verifies that no private data directory is embedded.
+
+## Running from source
+
+Create and activate a Python virtual environment, then install:
+
+```cmd
+python -m pip install -r requirements.txt
+```
+
+Launch with:
+
+```cmd
+ABRIR_GPS_ANALYST.cmd
+```
+
+or:
+
+```cmd
+python -m gps_analyst.app
+```
+
+## Privacy and data handling
+
+Operational GPS information can contain sensitive business or personal data.
+
+The repository therefore excludes:
+
+```text
+data/private/
+build/
+dist/
+.venv/
+```
+
+Real exports, vehicle identifiers, employee information, GPS positions and
+customer data are never required by the public test suite.
+
+The synthetic fixtures use fictional vehicle names, locations and
+`example.test` map URLs.
+
+## Release
+
+Current stable version:
+
+```text
+v0.1.0
+```
+
+The Git tag `v0.1.0` identifies the first stable release.
+
+## License
+
+The source code is publicly visible for portfolio and evaluation purposes.
+
+It is **not released under an open-source license**. See `LICENSE` for usage
+terms.
+
+## Third-party notice
+
+Automatica PLUS is a third-party product. This project is an independent
+analysis tool and is not affiliated with or endorsed by its vendor.
+
+Third-party Python packages remain subject to their respective licenses.
