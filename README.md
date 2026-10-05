@@ -1,4 +1,4 @@
-\# GPS Analyst
+# GPS Analyst
 
 
 
@@ -6,15 +6,15 @@ GPS Analyst es una herramienta interna para interpretar y analizar datos GPS de 
 
 
 
-\## Estado
+## Estado
 
 
 
-Versión en desarrollo: V0.1
+Versión estable: v0.1.0
 
 
 
-\## Objetivo V0.1
+## Objetivo V0.1
 
 
 
@@ -26,27 +26,27 @@ Debe ser capaz de:
 
 
 
-\- importar archivos Excel oficiales de Automatica PLUS;
+- importar archivos Excel oficiales de Automatica PLUS;
 
-\- detectar vehículos y días;
+- detectar vehículos y días;
 
-\- interpretar actividad y días sin actividad;
+- interpretar actividad y días sin actividad;
 
-\- reconstruir trayectos y paradas;
+- reconstruir trayectos y paradas;
 
-\- obtener inicio y fin de actividad;
+- obtener inicio y fin de actividad;
 
-\- calcular tiempos de conducción y parada;
+- calcular tiempos de conducción y parada;
 
-\- obtener kilómetros, velocidad y localizaciones;
+- obtener kilómetros, velocidad y localizaciones;
 
-\- validar los cálculos contra las hojas Totales y SubTotales;
+- validar los cálculos contra las hojas Totales y SubTotales;
 
-\- presentar una jornada GPS comprensible y verificable.
+- presentar una jornada GPS comprensible y verificable.
 
 
 
-\## Fuera de alcance de V0.1
+## Fuera de alcance de V0.1
 
 
 
@@ -54,21 +54,21 @@ Todavía no se incluye:
 
 
 
-\- integración con Woffu;
+- integración con Woffu;
 
-\- cruce con Time Analyst;
+- cruce con Time Analyst;
 
-\- alertas laborales;
+- alertas laborales;
 
-\- albaranes o facturación;
+- albaranes o facturación;
 
-\- identificación mediante iButton;
+- identificación mediante iButton;
 
-\- modificaciones sobre Automatica PLUS.
+- modificaciones sobre Automatica PLUS.
 
 
 
-\## Arquitectura
+## Arquitectura
 
 
 
@@ -112,7 +112,7 @@ La futura API no debe obligar a reescribir el motor GPS.
 
 
 
-\## Seguridad y privacidad
+## Seguridad y privacidad
 
 
 
@@ -140,23 +140,23 @@ No deben publicarse:
 
 
 
-\- archivos Excel reales;
+- archivos Excel reales;
 
-\- credenciales;
+- credenciales;
 
-\- nombres de empleados;
+- nombres de empleados;
 
-\- matrículas reales;
+- matrículas reales;
 
-\- posiciones GPS reales;
+- posiciones GPS reales;
 
-\- datos de clientes;
+- datos de clientes;
 
-\- rutas o históricos reales.
+- rutas o históricos reales.
 
 
 
-\## Formato Automatica PLUS
+## Formato Automatica PLUS
 
 
 
@@ -164,11 +164,11 @@ Los Excel estudiados contienen las hojas:
 
 
 
-\- Totales
+- Totales
 
-\- SubTotales
+- SubTotales
 
-\- Detalle
+- Detalle
 
 
 
@@ -176,23 +176,23 @@ Reglas observadas inicialmente:
 
 
 
-\- `PARA = ??` y `ARRANCA = hora` representa una apertura de bloque y no un trayecto real.
+- `PARA = ??` y `ARRANCA = hora` representa una apertura de bloque y no un trayecto real.
 
-\- `PARA = hora` y `ARRANCA = hora` representa una parada intermedia entre trayectos.
+- `PARA = hora` y `ARRANCA = hora` representa una parada intermedia entre trayectos.
 
-\- `PARA = hora` y `ARRANCA = ??` representa el último trayecto real del bloque.
+- `PARA = hora` y `ARRANCA = ??` representa el último trayecto real del bloque.
 
-\- Los valores de kilómetros y velocidad de una fila de apertura pueden estar arrastrados del bloque anterior y deben ignorarse.
+- Los valores de kilómetros y velocidad de una fila de apertura pueden estar arrastrados del bloque anterior y deben ignorarse.
 - Automatica PLUS puede omitir excepcionalmente la fila de apertura y contaminar el primer detalle con valores arrastrados; en ese caso deben conservarse los valores RAW y normalizarse únicamente los valores utilizables cuando el resumen y la coherencia física permitan demostrar la corrección.
 - Las distancias visibles están redondeadas a una decimal; la validación entre suma de detalles y resumen debe admitir la acumulación matemática de ese redondeo en función del número de tramos.
 
-\- `--` representa ausencia de actividad en determinados campos de resumen.
+- `--` representa ausencia de actividad en determinados campos de resumen.
 
-\- Las duraciones pueden superar las 24 horas y deben tratarse como duraciones, no como horas del reloj.
+- Las duraciones pueden superar las 24 horas y deben tratarse como duraciones, no como horas del reloj.
 
-\- Los decimales pueden utilizar coma.
+- Los decimales pueden utilizar coma.
 
-\- Un día con 0 km no implica necesariamente ausencia total de actividad.
+- Un día con 0 km no implica necesariamente ausencia total de actividad.
 
 
 
@@ -200,7 +200,7 @@ Estas reglas deberán quedar cubiertas mediante pruebas automatizadas.
 
 
 
-\## Desarrollo
+## Desarrollo
 
 
 
@@ -212,9 +212,9 @@ Dependencias iniciales:
 
 
 
-\- openpyxl
+- openpyxl
 
-\- pytest
+- pytest
 
 
 
