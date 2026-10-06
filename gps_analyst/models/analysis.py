@@ -52,6 +52,8 @@ class GpsDayAnalysis:
     stops: tuple[GpsStop, ...]
 
     validation_issues: tuple[str, ...]
+    quality: str = "normal"
+    quality_details: tuple[str, ...] = ()
 
     @property
     def is_valid(self) -> bool:

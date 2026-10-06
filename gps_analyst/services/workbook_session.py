@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -18,6 +19,7 @@ class GpsWorkbookSession:
         self._presenter = GpsDayPresenter()
 
         self._source_path: Path | None = None
+        self._warnings: tuple[str, ...] = ()
         self._views: dict[
             tuple[str, date],
             GpsDayView,
@@ -30,6 +32,10 @@ class GpsWorkbookSession:
     @property
     def day_count(self) -> int:
         return len(self._views)
+
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        return self._warnings
 
     @property
     def vehicles(self) -> tuple[str, ...]:
@@ -62,10 +68,42 @@ class GpsWorkbookSession:
     ) -> None:
         data = self._source.load(path)
 
-        if not data.is_valid:
+        day_labels = {
+            f"{day.block_date.isoformat()} / {day.vehicle}": (
+                day.vehicle,
+                day.block_date,
+            )
+            for day in data.days
+        }
+        recoverable_day_issues: dict[
+            tuple[str, date],
+            list[str],
+        ] = {}
+        blocking_issues: list[str] = []
+
+        for issue in data.validation_issues:
+            matched_key = next(
+                (
+                    key
+                    for label, key in day_labels.items()
+                    if issue.startswith(f"{label}:")
+                ),
+                None,
+            )
+
+            if matched_key is None:
+                blocking_issues.append(issue)
+                continue
+
+            recoverable_day_issues.setdefault(
+                matched_key,
+                [],
+            ).append(issue)
+
+        if blocking_issues:
             detail = "\n".join(
                 f"- {issue}"
-                for issue in data.validation_issues
+                for issue in blocking_issues
             )
 
             raise ValueError(
@@ -77,27 +115,55 @@ class GpsWorkbookSession:
             tuple[str, date],
             GpsDayView,
         ] = {}
+        warnings: list[str] = []
 
         for day in data.days:
+            day_key = (day.vehicle, day.block_date)
+            source_issues = tuple(
+                recoverable_day_issues.get(day_key, ())
+            )
+
             analysis = self._analyzer.analyze(day)
 
-            if not analysis.is_valid:
-                detail = "\n".join(
-                    f"- {issue}"
-                    for issue in analysis.validation_issues
+            combined_issues = tuple(
+                dict.fromkeys(
+                    (
+                        *source_issues,
+                        *analysis.validation_issues,
+                    )
                 )
+            )
 
-                raise ValueError(
-                    "No se ha podido reconstruir una jornada:\n"
-                    f"{detail}"
+            if day.has_partial_activity:
+                quality = "partial"
+            elif combined_issues:
+                quality = "incoherent"
+            else:
+                quality = analysis.quality
+
+            if (
+                combined_issues != analysis.validation_issues
+                or quality != analysis.quality
+            ):
+                analysis = replace(
+                    analysis,
+                    validation_issues=combined_issues,
+                    quality=quality,
+                    quality_details=combined_issues,
                 )
 
             view = self._presenter.present(analysis)
 
-            if not view.is_valid:
-                raise ValueError(
-                    "La jornada no ha superado "
-                    "la validación de presentación."
+            if view.quality == "partial":
+                warnings.append(
+                    f"{day.block_date.isoformat()} / {day.vehicle}: "
+                    "jornada parcial disponible para inspección."
+                )
+            elif view.quality == "incoherent":
+                warnings.append(
+                    f"{day.block_date.isoformat()} / {day.vehicle}: "
+                    "jornada con datos GPS incoherentes disponible "
+                    "para inspección."
                 )
 
             key = (
@@ -115,6 +181,7 @@ class GpsWorkbookSession:
             views[key] = view
 
         self._source_path = data.source_path
+        self._warnings = tuple(warnings)
         self._views = views
 
     def dates_for_vehicle(

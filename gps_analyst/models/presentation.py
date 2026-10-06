@@ -53,6 +53,8 @@ class GpsDayView:
     timeline: tuple[GpsTimelineItemView, ...]
 
     validation_issues: tuple[str, ...]
+    quality: str = "normal"
+    quality_details: tuple[str, ...] = ()
 
     @property
     def is_valid(self) -> bool:

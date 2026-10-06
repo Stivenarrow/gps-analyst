@@ -61,7 +61,23 @@ class VehicleDay:
 
     @property
     def has_activity(self) -> bool:
+        return (
+            self.start_at is not None
+            or self.end_at is not None
+            or self.jornada_seconds != 0
+            or self.driving_seconds != 0
+            or self.stop_seconds != 0
+            or abs(self.distance_km) > 0.001
+            or bool(self.events)
+        )
+
+    @property
+    def has_complete_boundaries(self) -> bool:
         return self.start_at is not None and self.end_at is not None
+
+    @property
+    def has_partial_activity(self) -> bool:
+        return self.has_activity and not self.has_complete_boundaries
 
     @property
     def computed_driving_seconds(self) -> int:

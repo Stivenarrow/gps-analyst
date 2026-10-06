@@ -397,6 +397,38 @@ class MetricCard(QFrame):
         layout.addWidget(self.value)
 
 
+def _preferred_date_text(
+    preferred: str | None,
+    date_map: dict[str, object],
+) -> str | None:
+    if preferred is not None and preferred in date_map:
+        return preferred
+
+    return next(iter(date_map), None)
+
+
+def _qualities_by_vehicle_for_date(
+    views,
+    block_date,
+) -> dict[str, set[str]]:
+    result: dict[str, set[str]] = {}
+
+    if block_date is None:
+        return result
+
+    for view in views:
+        if (
+            view.block_date == block_date
+            and view.quality != "normal"
+        ):
+            result.setdefault(
+                view.vehicle,
+                set(),
+            ).add(view.quality)
+
+    return result
+
+
 class GpsAnalystWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -507,6 +539,7 @@ class GpsAnalystWindow(QMainWindow):
         layout.setSpacing(16)
 
         layout.addWidget(self._build_header())
+        layout.addWidget(self._build_quality_panel())
         layout.addWidget(self._build_metrics())
         layout.addWidget(self._build_timeline(), 1)
 
@@ -548,6 +581,27 @@ class GpsAnalystWindow(QMainWindow):
         layout.addWidget(self.status_badge)
 
         return frame
+
+    def _build_quality_panel(self) -> QWidget:
+        self.quality_frame = QFrame()
+        self.quality_frame.setObjectName("qualityCard")
+
+        layout = QVBoxLayout(self.quality_frame)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(7)
+
+        self.quality_title = QLabel("")
+        self.quality_title.setWordWrap(True)
+
+        self.quality_text = QLabel("")
+        self.quality_text.setWordWrap(True)
+
+        layout.addWidget(self.quality_title)
+        layout.addWidget(self.quality_text)
+
+        self.quality_frame.hide()
+
+        return self.quality_frame
 
     def _build_metrics(self) -> QWidget:
         frame = QFrame()
@@ -700,16 +754,41 @@ class GpsAnalystWindow(QMainWindow):
             Path(path).name
         )
 
+        # A newly loaded workbook starts with its own date context.
+        self.current_date_text = None
         self._populate_vehicles()
+
+        if self.session.warnings:
+            count = len(self.session.warnings)
+
+            if count == 1:
+                review_text = (
+                    "Se ha detectado 1 jornada que requiere revisión.\n\n"
+                    "La jornada permanece disponible para su análisis."
+                )
+            else:
+                review_text = (
+                    f"Se han detectado {count} jornadas que requieren revisión.\n\n"
+                    "Todas permanecen disponibles para su análisis."
+                )
+
+            QMessageBox.information(
+                self,
+                "Excel cargado con avisos",
+                "Archivo cargado correctamente.\n\n"
+                f"{review_text}\n\n"
+                "Selecciona la jornada para consultar el motivo "
+                "y los datos disponibles.",
+            )
 
     def _populate_vehicles(self) -> None:
         self.vehicle_list.clear()
         self.search_box.clear()
 
         for vehicle in self.session.vehicles:
-            self.vehicle_list.addItem(
-                QListWidgetItem(vehicle)
-            )
+            item = QListWidgetItem(vehicle)
+            item.setData(Qt.UserRole, vehicle)
+            self.vehicle_list.addItem(item)
 
         if self.vehicle_list.count():
             self.vehicle_list.setCurrentRow(0)
@@ -734,7 +813,12 @@ class GpsAnalystWindow(QMainWindow):
         if current is None:
             return
 
-        self.current_vehicle = current.text()
+        preferred_date_text = self.current_date_text
+
+        self.current_vehicle = (
+            current.data(Qt.UserRole)
+            or current.text()
+        )
 
         dates = self.session.dates_for_vehicle(
             self.current_vehicle
@@ -746,7 +830,6 @@ class GpsAnalystWindow(QMainWindow):
         }
 
         self.date_menu.clear()
-        self.current_date_text = None
 
         for date_text in self.date_map:
             action = self.date_menu.addAction(
@@ -758,15 +841,19 @@ class GpsAnalystWindow(QMainWindow):
                 self._select_date(value)
             )
 
-        if self.date_map:
-            first_date = next(
-                iter(self.date_map)
-            )
-            self._select_date(first_date)
+        selected_date_text = _preferred_date_text(
+            preferred_date_text,
+            self.date_map,
+        )
+
+        if selected_date_text is not None:
+            self._select_date(selected_date_text)
         else:
+            self.current_date_text = None
             self.date_button.setText(
                 "Sin fechas disponibles    ▾"
             )
+            self._refresh_vehicle_quality_markers()
 
     def _select_date(
         self,
@@ -781,7 +868,50 @@ class GpsAnalystWindow(QMainWindow):
             f"{date_text}    ▾"
         )
 
+        self._refresh_vehicle_quality_markers()
         self._show_current_day()
+
+    def _refresh_vehicle_quality_markers(self) -> None:
+        selected_date = self.date_map.get(
+            self.current_date_text or ""
+        )
+
+        quality_by_vehicle = _qualities_by_vehicle_for_date(
+            self.session.views,
+            selected_date,
+        )
+
+        for row in range(self.vehicle_list.count()):
+            item = self.vehicle_list.item(row)
+            vehicle = (
+                item.data(Qt.UserRole)
+                or item.text().removeprefix("⚠ ")
+            )
+            qualities = quality_by_vehicle.get(
+                vehicle,
+                set(),
+            )
+
+            item.setText(
+                f"{'⚠ ' if qualities else ''}{vehicle}"
+            )
+
+            if "incoherent" in qualities:
+                item.setToolTip(
+                    "Requiere revisión en la fecha seleccionada: "
+                    "datos GPS incoherentes."
+                )
+            elif "partial" in qualities:
+                item.setToolTip(
+                    "Requiere revisión en la fecha seleccionada: "
+                    "jornada parcial."
+                )
+            else:
+                item.setToolTip("")
+
+        self._filter_vehicles(
+            self.search_box.text()
+        )
 
     def _show_current_day(self) -> None:
         if self.current_vehicle is None:
@@ -801,6 +931,51 @@ class GpsAnalystWindow(QMainWindow):
 
         self._render_view(view)
 
+    def _show_quality_panel(
+        self,
+        *,
+        title: str,
+        intro: str,
+        details: tuple[str, ...],
+        tone: str,
+    ) -> None:
+        if tone == "incoherent":
+            background = "#fff7ed"
+            border = "#fdba74"
+            title_color = "#9a3412"
+            text_color = "#7c2d12"
+        else:
+            background = "#fffbeb"
+            border = "#fcd34d"
+            title_color = "#92400e"
+            text_color = "#78350f"
+
+        self.quality_frame.setStyleSheet(
+            "QFrame#qualityCard {"
+            f"background:{background};"
+            f"border:1px solid {border};"
+            "border-radius:10px;"
+            "}"
+        )
+        self.quality_title.setStyleSheet(
+            f"color:{title_color};font-weight:700;font-size:14px;"
+        )
+        self.quality_text.setStyleSheet(
+            f"color:{text_color};"
+        )
+
+        detail_text = "\n".join(
+            f"• {detail}"
+            for detail in details
+        )
+        body = intro
+        if detail_text:
+            body += f"\n\nMotivos detectados:\n{detail_text}"
+
+        self.quality_title.setText(title)
+        self.quality_text.setText(body)
+        self.quality_frame.show()
+
     def _render_view(
         self,
         view: GpsDayView,
@@ -810,28 +985,72 @@ class GpsAnalystWindow(QMainWindow):
             f"Jornada · {view.date_text}"
         )
 
-        if view.active:
+        if view.quality == "incoherent":
             self.status_badge.setText(
-                "Con actividad"
+                "⚠ Datos incoherentes"
             )
             self.status_badge.setStyleSheet(
-                "background:#dcfce7;"
-                "color:#166534;"
+                "background:#ffedd5;"
+                "color:#9a3412;"
                 "padding:6px 10px;"
                 "border-radius:8px;"
                 "font-weight:600;"
+            )
+            self._show_quality_panel(
+                title="Datos GPS incoherentes",
+                intro=(
+                    "Hay actividad GPS, pero los datos de Automatica PLUS "
+                    "no son compatibles entre sí. Las métricas superiores muestran los valores del resumen original."
+                ),
+                details=view.quality_details,
+                tone="incoherent",
+            )
+        elif view.quality == "partial":
+            self.status_badge.setText(
+                "⚠ Jornada parcial"
+            )
+            self.status_badge.setStyleSheet(
+                "background:#fef3c7;"
+                "color:#92400e;"
+                "padding:6px 10px;"
+                "border-radius:8px;"
+                "font-weight:600;"
+            )
+            self._show_quality_panel(
+                title="Jornada parcial",
+                intro=(
+                    "Hay actividad GPS, pero faltan datos necesarios para "
+                    "reconstruir la jornada completa. Se muestra únicamente "
+                    "lo que puede interpretarse sin inventar información."
+                ),
+                details=view.quality_details,
+                tone="partial",
             )
         else:
-            self.status_badge.setText(
-                "Sin actividad"
-            )
-            self.status_badge.setStyleSheet(
-                "background:#f1f5f9;"
-                "color:#64748b;"
-                "padding:6px 10px;"
-                "border-radius:8px;"
-                "font-weight:600;"
-            )
+            self.quality_frame.hide()
+
+            if view.active:
+                self.status_badge.setText(
+                    "Con actividad"
+                )
+                self.status_badge.setStyleSheet(
+                    "background:#dcfce7;"
+                    "color:#166534;"
+                    "padding:6px 10px;"
+                    "border-radius:8px;"
+                    "font-weight:600;"
+                )
+            else:
+                self.status_badge.setText(
+                    "Sin actividad"
+                )
+                self.status_badge.setStyleSheet(
+                    "background:#f1f5f9;"
+                    "color:#64748b;"
+                    "padding:6px 10px;"
+                    "border-radius:8px;"
+                    "font-weight:600;"
+                )
 
         values = {
             "Inicio": view.start_text,
@@ -979,7 +1198,7 @@ def main() -> None:
     app.setFont(font)
 
     window = GpsAnalystWindow()
-    window.show()
+    window.showMaximized()
 
     apply_windows_titlebar(window)
 

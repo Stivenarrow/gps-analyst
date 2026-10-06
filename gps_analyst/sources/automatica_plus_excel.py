@@ -344,17 +344,123 @@ class AutomaticaPlusExcelSource:
     def _distance_rounding_tolerance(parts: int) -> float:
         return (max(parts, 0) + 1) * 0.05 + 0.001
 
+    @staticmethod
+    def _clock_at_or_after(
+        reference: datetime,
+        value: time,
+    ) -> datetime:
+        candidate = datetime.combine(reference.date(), value)
+
+        if candidate < reference:
+            candidate += timedelta(days=1)
+
+        return candidate
+
     def _normalize_events_for_summary(
         self,
         summary: dict[str, Any],
         events: tuple[GpsDetailEvent, ...],
     ) -> tuple[GpsDetailEvent, ...]:
+        if not events:
+            return events
+
+        start_at = summary["start_at"]
+        end_at = summary["end_at"]
+
+        if start_at is None or end_at is None:
+            return events
+
+        # Some Automatica PLUS exports omit the explicit opening row and instead
+        # emit a zero-duration segment at the exact start of the day. Treat it
+        # as the opening marker while preserving the raw distance/speed fields.
+        first = events[0]
         if (
-            not events
-            or summary["start_at"] is None
-            or summary["end_at"] is None
-            or events[0].kind == "opening"
+            first.kind == "segment"
+            and first.stop_at is not None
+            and first.restart_at is not None
+            and first.stop_at == start_at.time()
+            and first.restart_at == first.stop_at
+            and (first.driving_seconds or 0) == 0
+            and (first.stop_seconds or 0) == 0
         ):
+            first = replace(
+                first,
+                kind="opening",
+                stop_at=None,
+                driving_seconds=None,
+                stop_seconds=None,
+                max_speed_kmh=0.0,
+                distance_km=0.0,
+            )
+            events = (first, *events[1:])
+
+        # Detail duration fields can occasionally be carried from a neighbouring
+        # row. Rebuild them from the explicit time boundaries, but only accept
+        # the rebuilt values when the complete reconstructed totals match the
+        # SubTotales summary exactly.
+        cursor = start_at
+        rebuilt: list[GpsDetailEvent] = []
+        temporal_ok = True
+
+        for event in events:
+            if event.kind == "opening":
+                rebuilt.append(event)
+                continue
+
+            if event.stop_at is None:
+                temporal_ok = False
+                break
+
+            stop_at = self._clock_at_or_after(cursor, event.stop_at)
+            driving_seconds = int((stop_at - cursor).total_seconds())
+
+            if event.kind == "segment":
+                if event.restart_at is None:
+                    temporal_ok = False
+                    break
+
+                restart_at = self._clock_at_or_after(
+                    stop_at,
+                    event.restart_at,
+                )
+                stop_seconds = int(
+                    (restart_at - stop_at).total_seconds()
+                )
+                cursor = restart_at
+            else:
+                stop_seconds = None
+                cursor = stop_at
+
+            rebuilt.append(
+                replace(
+                    event,
+                    driving_seconds=driving_seconds,
+                    stop_seconds=stop_seconds,
+                )
+            )
+
+        if temporal_ok and len(rebuilt) == len(events):
+            rebuilt_driving = sum(
+                event.driving_seconds or 0
+                for event in rebuilt
+                if event.kind != "opening"
+            )
+            rebuilt_stop = sum(
+                event.stop_seconds or 0
+                for event in rebuilt
+                if event.kind == "segment"
+            )
+
+            if (
+                rebuilt_driving == summary["driving_seconds"]
+                and rebuilt_stop == summary["stop_seconds"]
+            ):
+                events = tuple(rebuilt)
+
+        # Explicit opening rows already have their carried distance normalized
+        # by _parse_detail. Distance reconciliation below is only for exports
+        # where the opening row itself is omitted.
+        if events[0].kind == "opening":
             return events
 
         real_events = [
@@ -371,7 +477,6 @@ class AutomaticaPlusExcelSource:
             event.distance_km or 0.0
             for event in real_events
         )
-
         tolerance = self._distance_rounding_tolerance(
             len(real_events)
         )
@@ -379,13 +484,12 @@ class AutomaticaPlusExcelSource:
         if computed_distance - summary_distance <= tolerance:
             return events
 
-        first = events[0]
+        first = real_events[0]
 
         if (
             first.kind not in {"segment", "closing"}
             or first.distance_km is None
-            or first.driving_seconds is None
-            or first.driving_seconds <= 0
+            or first.stop_at is None
         ):
             return events
 
@@ -393,7 +497,6 @@ class AutomaticaPlusExcelSource:
             event.distance_km or 0.0
             for event in real_events[1:]
         )
-
         inferred_distance = round(
             summary_distance - remaining_distance,
             3,
@@ -407,51 +510,45 @@ class AutomaticaPlusExcelSource:
         if inferred_distance > first.distance_km + tolerance:
             return events
 
-        summary_max_speed = float(summary["max_speed_kmh"])
-
-        raw_speed = first.raw_max_speed_kmh
-        raw_distance = first.raw_distance_km
-
-        speed_exceeds_summary = (
-            raw_speed is not None
-            and raw_speed > summary_max_speed + 0.001
+        # Guard the correction with the temporal boundary of the first trip.
+        first_stop_at = self._clock_at_or_after(
+            start_at,
+            first.stop_at,
+        )
+        expected_first_driving = int(
+            (first_stop_at - start_at).total_seconds()
         )
 
-        raw_average_exceeds_peak = False
-
         if (
-            raw_distance is not None
-            and raw_speed is not None
-            and raw_speed > 0
-        ):
-            raw_average = (
-                raw_distance * 3600
-                / first.driving_seconds
-            )
-
-            raw_average_exceeds_peak = (
-                raw_average > raw_speed + 0.5
-            )
-
-        if not (
-            speed_exceeds_summary
-            or raw_average_exceeds_peak
+            first.driving_seconds is not None
+            and first.driving_seconds != expected_first_driving
         ):
             return events
 
-        if summary_max_speed > 0:
+        summary_max_speed = float(summary["max_speed_kmh"])
+
+        if expected_first_driving > 0 and summary_max_speed > 0:
             inferred_average = (
-                inferred_distance * 3600
-                / first.driving_seconds
+                inferred_distance
+                * 3600
+                / expected_first_driving
             )
 
             if inferred_average > summary_max_speed + 0.5:
                 return events
 
+        normalized_speed = first.max_speed_kmh
+        if (
+            normalized_speed is not None
+            and summary_max_speed > 0
+            and normalized_speed > summary_max_speed + 0.001
+        ):
+            normalized_speed = None
+
         normalized_first = replace(
             first,
             distance_km=inferred_distance,
-            max_speed_kmh=None,
+            max_speed_kmh=normalized_speed,
         )
 
         return (normalized_first, *events[1:])
@@ -472,21 +569,12 @@ class AutomaticaPlusExcelSource:
                 )
 
             if not day.has_activity:
-                if (
-                    day.jornada_seconds != 0
-                    or day.driving_seconds != 0
-                    or day.stop_seconds != 0
-                    or abs(day.distance_km) > 0.001
-                ):
-                    issues.append(
-                        f"{label}: día sin actividad contiene métricas no nulas"
-                    )
+                continue
 
-                if day.events:
-                    issues.append(
-                        f"{label}: día sin actividad contiene filas de detalle"
-                    )
-
+            # Partial activity is usable evidence, but it cannot be reconstructed
+            # safely without both day boundaries. It is handled by the session
+            # as a non-blocking skipped day instead of invalidating the workbook.
+            if day.has_partial_activity:
                 continue
 
             if not day.events:

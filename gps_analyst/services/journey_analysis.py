@@ -31,8 +31,34 @@ class GpsDayAnalysisService:
             )
 
         if day.start_at is None or day.end_at is None:
-            raise ValueError(
-                "Una jornada activa debe contener inicio y fin."
+            missing: list[str] = []
+            if day.start_at is None:
+                missing.append("inicio")
+            if day.end_at is None:
+                missing.append("fin")
+
+            issue = (
+                "Jornada parcial: falta "
+                + " y ".join(missing)
+                + ". La cronología completa no puede reconstruirse "
+                "sin inventar datos."
+            )
+
+            return GpsDayAnalysis(
+                vehicle=day.vehicle,
+                block_date=day.block_date,
+                start_at=day.start_at,
+                end_at=day.end_at,
+                jornada_seconds=day.jornada_seconds,
+                driving_seconds=day.driving_seconds,
+                stop_seconds=day.stop_seconds,
+                distance_km=day.distance_km,
+                max_speed_kmh=day.max_speed_kmh,
+                trips=(),
+                stops=(),
+                validation_issues=(issue,),
+                quality="partial",
+                quality_details=(issue,),
             )
 
         trips: list[GpsTrip] = []
@@ -212,6 +238,8 @@ class GpsDayAnalysisService:
                 f"!= resumen {day.distance_km:.3f} km"
             )
 
+        quality = "incoherent" if issues else "normal"
+
         return GpsDayAnalysis(
             vehicle=day.vehicle,
             block_date=day.block_date,
@@ -225,6 +253,8 @@ class GpsDayAnalysisService:
             trips=tuple(trips),
             stops=tuple(stops),
             validation_issues=tuple(issues),
+            quality=quality,
+            quality_details=tuple(issues),
         )
 
     @staticmethod

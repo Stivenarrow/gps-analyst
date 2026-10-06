@@ -90,13 +90,272 @@ class GpsDayPresenter:
                     or previous_location
                 )
 
+        raw_quality_details = (
+            analysis.quality_details
+            or analysis.validation_issues
+        )
+        quality_details: list[str] = []
+
+        if analysis.quality == "partial":
+            quality_details.extend(raw_quality_details)
+
+        elif analysis.quality == "incoherent":
+            if (
+                analysis.start_at is not None
+                and analysis.end_at is not None
+            ):
+                elapsed_seconds = int(
+                    (
+                        analysis.end_at
+                        - analysis.start_at
+                    ).total_seconds()
+                )
+                summary_seconds = (
+                    analysis.driving_seconds
+                    + analysis.stop_seconds
+                )
+                summary_delta = (
+                    summary_seconds
+                    - elapsed_seconds
+                )
+
+                if summary_delta != 0:
+                    quality_details.append(
+                        (
+                            "Entre inicio y fin transcurren "
+                            f"{self._format_duration(elapsed_seconds)}, "
+                            "pero el resumen de Automatica PLUS contabiliza "
+                            f"{self._format_duration(summary_seconds)} "
+                            "("
+                            f"{self._format_duration(analysis.driving_seconds)} "
+                            "de conducción + "
+                            f"{self._format_duration(analysis.stop_seconds)} "
+                            "parado). Hay una diferencia de "
+                            f"{self._format_duration(abs(summary_delta))} "
+                            + (
+                                "por encima de la duración posible."
+                                if summary_delta > 0
+                                else "por debajo de la duración posible."
+                            )
+                        )
+                    )
+
+            for issue in raw_quality_details:
+                source_prefix = (
+                    f"{analysis.block_date.isoformat()} / "
+                    f"{analysis.vehicle}: "
+                )
+                if issue.startswith(source_prefix):
+                    issue = issue[len(source_prefix):]
+
+                lowered = issue.casefold()
+
+                if "la última fila de detalle no es closing" in lowered:
+                    quality_details.append(
+                        "La última fila de detalle no está marcada "
+                        "como cierre de jornada."
+                    )
+                    continue
+
+                if (
+                    "trayecto temporal " in lowered
+                    and " != detalle " in lowered
+                ):
+                    try:
+                        event_text, values = issue.split(
+                            ": trayecto temporal ",
+                            1,
+                        )
+                        temporal_text, detail_text = values.split(
+                            "s != detalle ",
+                            1,
+                        )
+                        event_index = event_text.replace(
+                            "Evento ",
+                            "",
+                        ).strip()
+                        temporal_seconds = int(temporal_text)
+                        detail_seconds = int(
+                            detail_text.removesuffix("s")
+                        )
+                    except (ValueError, TypeError):
+                        quality_details.append(issue)
+                    else:
+                        quality_details.append(
+                            (
+                                f"El evento {event_index} dura "
+                                f"{self._format_duration(temporal_seconds)} "
+                                "según sus horas registradas, pero "
+                                "Automatica PLUS le atribuye "
+                                f"{self._format_duration(detail_seconds)} "
+                                "de conducción."
+                            )
+                        )
+                    continue
+
+                if (
+                    "parada temporal " in lowered
+                    and " != detalle " in lowered
+                ):
+                    try:
+                        event_text, values = issue.split(
+                            ": parada temporal ",
+                            1,
+                        )
+                        temporal_text, detail_text = values.split(
+                            "s != detalle ",
+                            1,
+                        )
+                        event_index = event_text.replace(
+                            "Evento ",
+                            "",
+                        ).strip()
+                        temporal_seconds = int(temporal_text)
+                        detail_seconds = int(
+                            detail_text.removesuffix("s")
+                        )
+                    except (ValueError, TypeError):
+                        quality_details.append(issue)
+                    else:
+                        quality_details.append(
+                            (
+                                f"La parada del evento {event_index} dura "
+                                f"{self._format_duration(temporal_seconds)} "
+                                "según sus horas registradas, pero "
+                                "Automatica PLUS informa "
+                                f"{self._format_duration(detail_seconds)}."
+                            )
+                        )
+                    continue
+
+                if (
+                    "resumen" in lowered
+                    and (
+                        "conduccion reconstruida" in lowered
+                        or "conducción reconstruida" in lowered
+                        or "conduccion calculada" in lowered
+                        or "conducción calculada" in lowered
+                    )
+                ):
+                    continue
+
+                if (
+                    lowered.startswith("parada reconstruida ")
+                    and " != resumen " in lowered
+                ):
+                    try:
+                        rebuilt_text, summary_text = issue.split(
+                            " != resumen ",
+                            1,
+                        )
+                        rebuilt_seconds = int(
+                            rebuilt_text.rsplit(" ", 1)[-1].removesuffix("s")
+                        )
+                        summary_seconds = int(
+                            summary_text.removesuffix("s")
+                        )
+                    except (ValueError, TypeError):
+                        pass
+                    else:
+                        quality_details.append(
+                            (
+                                "La cronología permite reconstruir "
+                                f"{self._format_duration(rebuilt_seconds)} "
+                                "de tiempo parado, frente a "
+                                f"{self._format_duration(summary_seconds)} "
+                                "indicados en el resumen."
+                            )
+                        )
+                        continue
+
+                if (
+                    lowered.startswith("distancia reconstruida ")
+                    and " != resumen " in lowered
+                ):
+                    try:
+                        rebuilt_text, summary_text = issue.split(
+                            " != resumen ",
+                            1,
+                        )
+                        rebuilt_km = float(
+                            rebuilt_text.rsplit(" ", 2)[-2]
+                        )
+                        summary_km = float(
+                            summary_text.rsplit(" ", 1)[0]
+                        )
+                    except (ValueError, TypeError):
+                        pass
+                    else:
+                        quality_details.append(
+                            (
+                                "La cronología suma "
+                                f"{rebuilt_km:.1f} km, frente a "
+                                f"{summary_km:.1f} km indicados "
+                                "en el resumen."
+                            )
+                        )
+                        continue
+
+                if "!=" in issue:
+                    quality_details.append(
+                        "Se ha detectado una discrepancia interna "
+                        "entre el detalle y el resumen de Automatica PLUS."
+                    )
+                    continue
+
+                quality_details.append(issue)
+
+            if (
+                analysis.computed_driving_seconds
+                != analysis.driving_seconds
+            ):
+                quality_details.append(
+                    (
+                        "La cronología permite reconstruir "
+                        f"{self._format_duration(analysis.computed_driving_seconds)} "
+                        "de conducción, frente a "
+                        f"{self._format_duration(analysis.driving_seconds)} "
+                        "indicados en el resumen."
+                    )
+                )
+
+            if (
+                analysis.computed_stop_seconds
+                != analysis.stop_seconds
+            ):
+                quality_details.append(
+                    (
+                        "La cronología permite reconstruir "
+                        f"{self._format_duration(analysis.computed_stop_seconds)} "
+                        "de tiempo parado, frente a "
+                        f"{self._format_duration(analysis.stop_seconds)} "
+                        "indicados en el resumen."
+                    )
+                )
+
+        else:
+            quality_details.extend(raw_quality_details)
+
+        quality_details = list(
+            dict.fromkeys(quality_details)
+        )
+
         return GpsDayView(
             vehicle=analysis.vehicle,
             block_date=analysis.block_date,
             date_text=analysis.block_date.strftime(
                 "%d/%m/%Y"
             ),
-            active=analysis.start_at is not None,
+            active=(
+                analysis.start_at is not None
+                or analysis.end_at is not None
+                or analysis.jornada_seconds != 0
+                or analysis.driving_seconds != 0
+                or analysis.stop_seconds != 0
+                or abs(analysis.distance_km) > 0.001
+                or bool(analysis.trips)
+                or bool(analysis.stops)
+            ),
             start_text=(
                 self._format_clock(analysis.start_at)
                 if analysis.start_at is not None
@@ -124,6 +383,8 @@ class GpsDayPresenter:
             ),
             timeline=tuple(timeline),
             validation_issues=analysis.validation_issues,
+            quality=analysis.quality,
+            quality_details=tuple(quality_details),
         )
 
     def render_text(
