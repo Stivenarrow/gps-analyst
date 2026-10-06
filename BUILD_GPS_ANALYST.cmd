@@ -7,6 +7,8 @@ set "PYTHON=.venv\Scripts\python.exe"
 set "DIST_DIR=dist\GPS Analyst"
 set "WORK_DIR=build\pyinstaller-work"
 set "SPEC_DIR=build\pyinstaller-spec"
+set "ICON_PATH=%CD%\assets\gps-analyst.ico"
+set "VERSION_FILE=%CD%\assets\windows-version-info.txt"
 
 echo ===== GPS ANALYST WINDOWS BUILD =====
 echo.
@@ -54,6 +56,9 @@ echo ===== PYINSTALLER =====
  --windowed ^
  --onedir ^
  --name "GPS Analyst" ^
+ --icon "%ICON_PATH%" ^
+ --add-data "%ICON_PATH%;assets" ^
+ --version-file "%VERSION_FILE%" ^
  --distpath dist ^
  --workpath "%WORK_DIR%" ^
  --specpath "%SPEC_DIR%" ^

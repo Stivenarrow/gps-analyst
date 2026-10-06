@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QDesktopServices, QFont, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QMenu,
@@ -31,6 +31,16 @@ from PySide6.QtWidgets import (
 
 from gps_analyst.models.presentation import GpsDayView
 from gps_analyst.services.workbook_session import GpsWorkbookSession
+
+
+def resource_path(relative_path: str) -> Path:
+    frozen_base = getattr(sys, "_MEIPASS", None)
+    if frozen_base:
+        return Path(frozen_base) / relative_path
+    return Path(__file__).resolve().parent.parent / relative_path
+
+
+APP_ICON_PATH = resource_path("assets/gps-analyst.ico")
 
 
 APP_STYLE = """
@@ -398,6 +408,8 @@ class GpsAnalystWindow(QMainWindow):
         self.map_targets: dict[int, str] = {}
 
         self.setWindowTitle("GPS Analyst")
+        if APP_ICON_PATH.exists():
+            self.setWindowIcon(QIcon(str(APP_ICON_PATH)))
         self.resize(1440, 880)
         self.setMinimumSize(1120, 700)
 
@@ -947,9 +959,19 @@ class GpsAnalystWindow(QMainWindow):
 
 
 def main() -> None:
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Stivenarrow.GPSAnalyst")
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
 
     app.setApplicationName("GPS Analyst")
+    app.setApplicationDisplayName("GPS Analyst")
+    app.setOrganizationName("Stivenarrow")
+    if APP_ICON_PATH.exists():
+        app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
     app.setStyle("Fusion")
     app.setStyleSheet(APP_STYLE)
 

@@ -7,7 +7,7 @@ The current release supports XLSX exports from **Automatica PLUS** and
 transforms low-level tracking records into a chronological, human-readable
 view of each vehicle day.
 
-**Stable release:** `v0.1.0`
+**Stable release:** `v0.1.1`
 
 ## What it does
 
@@ -262,7 +262,7 @@ The synthetic fixtures use fictional vehicle names, locations and
 Current stable version:
 
 ```text
-v0.1.0
+v0.1.1
 ```
 
 The Git tag `v0.1.0` identifies the first stable release.
