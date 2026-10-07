@@ -164,8 +164,8 @@ required.
 Current release:
 
 ```text
-30 tests
-30 passed
+41 tests
+41 passed
 ```
 
 For local development, the same suite can optionally be run against private
